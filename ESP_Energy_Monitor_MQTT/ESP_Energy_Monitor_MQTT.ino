@@ -27,28 +27,28 @@
  * 
  * v3
  */
-
+/************* INCLUDES 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <EEPROM.h>   / NEWNEW
 
-/************************* CONFIG WIFI *********************************/
-const char* ssid = "UNIVERSE";                    // Wifi SSID
-const char* password = "2526F68597";              // Wifi password
+/************* CONFIG WIFI *********************************/
+const char* ssid = "wifi_ssid";                    // Wifi SSID
+const char* password = "wifi_password";            // Wifi password
 
-byte mac[6];                                      // MAC address
+byte mac[6];                                       // MAC address
 
-IPAddress ip(192,168,1,220);                      // IP address
-IPAddress dns(192,168,1,1);                       // DNS server
-IPAddress gateway(8,8,8,8);                       // Gateway
-IPAddress subnet(255,255,255,0);                  // Subnet mask
+IPAddress ip(192,168,1,220);                       // IP address
+IPAddress dns(192,168,1,1);                        // DNS server
+IPAddress gateway(8,8,8,8);                        // Gateway
+IPAddress subnet(255,255,255,0);                   // Subnet mask
 
-/**************************** CONFIG MQTT ************************************/
-const char* mqtt_server = "192.168.1.200";      // MQTT server
-const char* mqtt_username = "homeassistant";                    // MQTT user
-const char* mqtt_password = "JA2508ca72";                       // MQTT password
+/************* CONFIG MQTT ************************************/
+const char* mqtt_server = "192.168.xxx.yyy";        // MQTT server
+const char* mqtt_username = "mqtt_user";            // MQTT user
+const char* mqtt_password = "mqtt_password";        // MQTT password
 
-/**************************** MQTT topics ************************************/
+/************* MQTT topics ************************************/
 const char* mqtt_topic_watt = "ESP_Energy_Meter_01/watt_test";   // MQTT topic - watt
 const char* mqtt_topic_kwh = "ESP_Energy_Meter_01/kwh_test";     // MQTT topic - kwh
 const char* mqtt_topic_pulse = "ESP_Energy_Meter_01/pulse_test"; // MQTT topic - pulse
@@ -56,13 +56,13 @@ const char* mqtt_topic_ip = "ESP_Energy_Meter_01/ip_test";       // MQTT topic -
 const char* mqtt_topic_mac = "ESP_Energy_Meter_01/mac_test";     // MQTT topic - mac
 
 
-/**************************** CONFIG PINS ************************************/
+/************* CONFIG PINS ************************************/
 #define DIGITAL_INPUT_SENSOR 12   // The digital input D6 in Wemos D1 mini
 
-/**************************** CONFIG PULSES PER KWH ************************************/
+/************* CONFIG PULSES PER KWH ************************************/
 #define PULSE_FACTOR 1000         // Number of pulses per kWh of your meeter
 
-/**************************** CONFIG GLOBALS ************************************/
+/************* CONFIG GLOBALS ************************************/
 unsigned long SEND_FREQUENCY = 15000;   // Minimum time between send (in milliseconds)
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastBlink = 0;
@@ -80,7 +80,7 @@ double kwhaccum;    // NEWNEW
 char kwhaccumString[7];    // NEWNEW
 float kwhReading;    // NEWNEW
 
-/**************************** SETUP WIFI ************************************/
+/************* SETUP WIFI ************************************/
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
@@ -117,7 +117,7 @@ void setup_wifi() {
   Serial.println(mac[0],HEX);
 }
 
-/**************************** READ MQTT TOPIC ************************************/
+/************* READ MQTT TOPIC ************************************/
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
   Serial.print("Message arrived [");
@@ -137,7 +137,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
 }
   
-/**************************** RECONNECT MQTT ************************************/
+/************* RECONNECT MQTT ************************************/
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
@@ -156,7 +156,7 @@ void reconnect() {
   }
 }
 
-/**************************** SETUP ************************************/
+/************* SETUP ************************************/
 void setup()
 {
 
@@ -175,7 +175,7 @@ void setup()
 
 }
 
-/**************************** LOOP ************************************/
+/************* LOOP ************************************/
 void loop()
 {
   
