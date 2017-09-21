@@ -1,69 +1,60 @@
 /**
- * This script is based on these sources:
+ * 
+ * ESP Energy Monitor v3 by Jorge Assunção
+ * 
+ * Based on a project of timseebeck https://community.home-assistant.io/u/timseebeck on https://community.home-assistant.io
+ * See timseebeck project here: https://community.home-assistant.io/t/power-monitoring-with-an-xtm18s-and-mqtt/16316
+ * 
+ * See Github for instructions on how to use this code : https://github.com/jorgeassuncao/ESP8266-Energy-Monitor
+ * 
  *
- * To count pulses using interruptions:  https://github.com/mysensors/MySensors/blob/master/examples/EnergyMeterPulseSensor/EnergyMeterPulseSensor.ino
- * To connect to Wifi and publish MQTT messages:  https://github.com/knolleary/pubsubclient/blob/master/examples/mqtt_esp8266/mqtt_esp8266.ino
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
+ * This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License
  * version 2 as published by the Free Software Foundation.
- *
- *******************************
- *
- * DESCRIPTION
- * - Use this sensor to measure kWh and Watt of your house meter.
- * - You need to set the correct pulsefactor of your meter (pulses per kWh).
- * - You have to update the information related to the MQTT server
- * - Reports to different MQTT topics every SEND_FREQUENCY miliseconds
  * 
- * - Flash using: Board "NodeMCU 1.0 (ESP-12E Module)", CPU Frequency "80MHz", Flash Size "4M (3M SPIFFS)" and Upload Speed "115200"
- *
- * (1)- Energy (in kWh) consumed in the last SEND_FREQUENCY/1000 seconds
- * (2)- Power (in W) consumed in the last SEND_FREQUENCY/1000 seconds
- * (3)- Energy (in kWh) consumed since the device was switched on
- * There could be errors in (1) and (2) since pulse counting and information sending events
- * do not take place at the same time. (3), if enough time has passed by, is as accurate as
- * the one from the measuring device
- * 
- * v3
  */
-/************* INCLUDES 
+ 
+/************* INCLUDES *****************************************************************************/
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <EEPROM.h>   / NEWNEW
 
-/************* CONFIG WIFI *********************************/
-const char* ssid = "wifi_ssid";                    // Wifi SSID
-const char* password = "wifi_password";            // Wifi password
+/************* CONFIG WIFI *****************************************************************************/
+const char* ssid = "wifi_ssid";                   // Wifi SSID
+const char* password = "wifi_password";           // Wifi password
 
-byte mac[6];                                       // MAC address
+byte mac[6];                                      // MAC address
 
-IPAddress ip(192,168,1,220);                       // IP address
-IPAddress dns(192,168,1,1);                        // DNS server
-IPAddress gateway(8,8,8,8);                        // Gateway
-IPAddress subnet(255,255,255,0);                   // Subnet mask
+IPAddress ip(xxx,xxx,xxx,xxx);                    // IP address
+IPAddress dns(xxx,xxx,xxx,xxx);                   // DNS server
+IPAddress gateway(xxx,xxx,xxx,xxx);               // Gateway
+IPAddress subnet(xxx,xxx,xxx,xxx);                // Subnet mask
 
-/************* CONFIG MQTT ************************************/
-const char* mqtt_server = "192.168.xxx.yyy";        // MQTT server
-const char* mqtt_username = "mqtt_user";            // MQTT user
-const char* mqtt_password = "mqtt_password";        // MQTT password
+/************* CONFIG MQTT *****************************************************************************/
+const char* mqtt_server = "mqtt_server_address";        // MQTT server IP ou URL
+const char* mqtt_username = "mqtt_user";                // MQTT user
+const char* mqtt_password = "mqtt_password";            // MQTT password
 
-/************* MQTT topics ************************************/
-const char* mqtt_topic_watt = "ESP_Energy_Meter_01/watt_test";   // MQTT topic - watt
-const char* mqtt_topic_kwh = "ESP_Energy_Meter_01/kwh_test";     // MQTT topic - kwh
-const char* mqtt_topic_pulse = "ESP_Energy_Meter_01/pulse_test"; // MQTT topic - pulse
-const char* mqtt_topic_ip = "ESP_Energy_Meter_01/ip_test";       // MQTT topic - ip
-const char* mqtt_topic_mac = "ESP_Energy_Meter_01/mac_test";     // MQTT topic - mac
+/************* MQTT topics *****************************************************************************/
+const char* mqtt_topic_watt = "ESP_Energy_Meter_01/watt";       // MQTT topic - watt
+const char* mqtt_topic_kwh = "ESP_Energy_Meter_01/kwh";         // MQTT topic - kwh
+const char* mqtt_topic_pulse = "ESP_Energy_Meter_01/pulse";     // MQTT topic - pulse
+const char* mqtt_topic_ip = "ESP_Energy_Meter_01/ip";           // MQTT topic - ip
+const char* mqtt_topic_mac = "ESP_Energy_Meter_01/mac";         // MQTT topic - mac
 
 
-/************* CONFIG PINS ************************************/
-#define DIGITAL_INPUT_SENSOR 12   // The digital input D6 in Wemos D1 mini
+/************* CONFIG PINS *****************************************************************************/
+#define DIGITAL_INPUT_SENSOR 12           // Digital input D6 in Wemos D1 mini
 
-/************* CONFIG PULSES PER KWH ************************************/
-#define PULSE_FACTOR 1000         // Number of pulses per kWh of your meeter
+int LED_pin = 2;                          // Internal LED in NodeMCU
+#define BRIGHT 150                        // Maximum LED intensity (1-500)
+#define INHALE 1500                       // Breathe-in time in milliseconds
+#define PULSE INHALE*1000/BRIGHT          // Pulse
+#define REST 1000                         // Pause between breathes
 
-/************* CONFIG GLOBALS ************************************/
-unsigned long SEND_FREQUENCY = 15000;   // Minimum time between send (in milliseconds)
+/************* CONFIG PULSES PER KWH *****************************************************************************/
+#define PULSE_FACTOR 1000                 // Number of pulses per kWh of the meter
+
+/************* CONFIG GLOBALS *****************************************************************************/
+unsigned long SEND_FREQUENCY = 15000;     // Minimum time between send in milliseconds
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastBlink = 0;
 double kwh;
@@ -76,11 +67,11 @@ long lastMsg = 0;
 char msg[50];
 char wattString[7];
 char kwhString[7];
-double kwhaccum;    // NEWNEW
-char kwhaccumString[7];    // NEWNEW
-float kwhReading;    // NEWNEW
+double kwhaccum;
+char kwhaccumString[7];
+float kwhReading;
 
-/************* SETUP WIFI ************************************/
+/************* SETUP WIFI *****************************************************************************/
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
@@ -117,35 +108,32 @@ void setup_wifi() {
   Serial.println(mac[0],HEX);
 }
 
-/************* READ MQTT TOPIC ************************************/
+/************* READ MQTT TOPIC *****************************************************************************/
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
-  Serial.print("Message arrived [");
+  Serial.print("Message arrived for topic [");
   Serial.print(topic);
   Serial.print("] ");
-  String value = "";   // NEWNEW
+  String value = "";
   for (int i=0;i<length;i++) {
-    value += (char)payload[i];   // NEWNEW
+    value += (char)payload[i];
   }
-  kwhReading = value.toFloat();   // NEWNEW
-  
+  kwhReading = value.toFloat();
   Serial.println();
-  Serial.print("value: ");   // NEWNEW
-  Serial.println(value);   // NEWNEW
-  Serial.print("kwhReading: ");   // NEWNEW
-  Serial.println(kwhReading);   // NEWNEW
+  Serial.print("Last kWh Reading: ");
+  Serial.println(kwhReading);
   Serial.println();
 }
   
-/************* RECONNECT MQTT ************************************/
+/************* RECONNECT MQTT *****************************************************************************/
 void reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
+    Serial.print("Attempting connection to MQTT server... ");
     // Attempt to connect
-    if (client.connect("ESP8266ClientTest", mqtt_username, mqtt_password)) {
-      Serial.println("connected");
-      client.subscribe("ESP_Energy_Meter_01/pulse_test");
+    if (client.connect("ESPenergyMonitor01", mqtt_username, mqtt_password)) {
+      Serial.println(" connected!");
+      client.subscribe("ESP_Energy_Meter_01/pulse");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -156,10 +144,11 @@ void reconnect() {
   }
 }
 
-/************* SETUP ************************************/
+/************* SETUP *****************************************************************************/
 void setup()
 {
-
+  pinMode(LED_pin, OUTPUT);   // Configure internal LED pin as output.
+  
   Serial.begin(115200);
   setup_wifi();
   client.setServer(mqtt_server, 1883);
@@ -172,78 +161,76 @@ void setup()
   // Initialization of variables
   kwh = 0;
   lastSend=millis();
-
 }
 
-/************* LOOP ************************************/
+/************* LOOP *****************************************************************************/
 void loop()
 {
+    // Breath in 
+    for (int ii=1;ii<BRIGHT;ii++){
+      digitalWrite(LED_pin, LOW);         // LED on
+      delayMicroseconds(ii*10);           // wait
+      digitalWrite(LED_pin, HIGH);        // LED off
+      delayMicroseconds(PULSE-ii*10);     // wait
+      delay(0);                           // prevent watchdog firing
+    }
+    // Breath in
+    for (int ii=BRIGHT-1;ii>0;ii--){
+      digitalWrite(LED_pin, LOW);         // LED on
+      delayMicroseconds(ii*10);           // wait
+      digitalWrite(LED_pin, HIGH);        // LED off
+      delayMicroseconds(PULSE-ii*10);     // wait
+      ii--;
+      delay(0);                           // prevent watchdog firing
+    }
+      delay(REST);                        // pause before repeat
   
     if (!client.connected()) {
         reconnect();
     }
+    
     client.loop();
 
     unsigned long now = millis();
     // Only send values at a maximum frequency
     bool sendTime = now - lastSend > SEND_FREQUENCY;
+    
     if (sendTime) {
-      
-        // convert to a string with 2 digits before the comma and 2 digits for precision
-        dtostrf(kwh, 2, 4, kwhString);
-        client.publish(mqtt_topic_kwh,kwhString);  // Publish kwh to MQTT topic
-        Serial.print("kwh: ");   // NEWNEW
-        Serial.println(kwh);    // NEWNEW
-        Serial.print("kwhString: ");   // NEWNEW
-        Serial.println(kwhString);    // NEWNEW
-        lastSend = now;  // once every thing is published we update the send time
+      dtostrf(kwh, 2, 4, kwhString);                                              // Convert Current kWh to string
+      client.publish(mqtt_topic_kwh,kwhString);                                   // Publish Current kWh to MQTT topic
+      Serial.print("- Current kWh: "); Serial.println(kwhString);                 // Publish Current kWh to serial interface
+      lastSend = now;                                                             // Update the send time after publishing
         
-        // We calculate the power using the energy
-        double watt = kwh * 1000.0 * 3600.0 / (double)SEND_FREQUENCY * 1000.0;
-        dtostrf(watt, 4, 2, wattString);
-        client.publish(mqtt_topic_watt,wattString);  // Publish watt to MQTT topic
-        Serial.print("watt: ");    // NEWNEW
-        Serial.println(watt);   // NEWNEW
-        Serial.print("wattString: ");    // NEWNEW
-        Serial.println(wattString);   // NEWNEW
-        
-        // We calculate the accumulated energy since the begining using pulses count
-        // kwhaccum = kwhaccum + kwhReading;
-        kwhaccum = kwhReading + ((double)pulseCount/((double)PULSE_FACTOR));
-        
-        dtostrf(kwhaccum, 5, 2, kwhaccumString);
-        
-        client.publish(mqtt_topic_pulse,kwhaccumString, true);  // Publish pulses to MQTT topic   <<<<- - - - - - - - -
-        
-        Serial.print("kwhReading: ");   // NEWNEW
-        Serial.println(kwhReading);   // NEWNEW
-        Serial.print("kwhaccum: ");   // NEWNEW
-        Serial.println(kwhaccum);   // NEWNEW
-        Serial.print("kwhaccumString: ");   // NEWNEW
-        Serial.println(kwhaccumString);   // NEWNEW
-        kwh = 0;
-        
-        // Send IP address
-        String ipaddress = WiFi.localIP().toString();
-        char ipchar[ipaddress.length()+1];
-        ipaddress.toCharArray(ipchar,ipaddress.length()+1);
-        client.publish(mqtt_topic_ip,ipchar);  // Publish IP address
-    }
+      double watt = kwh * 1000.0 * 3600.0 / (double)SEND_FREQUENCY * 1000.0;      // Calculate the power using the energy
+      dtostrf(watt, 4, 2, wattString);                                            // Convert Current Watt to string
+      client.publish(mqtt_topic_watt,wattString);                                 // Publish Current Watt to MQTT topic
+      Serial.print("- Current Watt: "); Serial.println(wattString);               // Publish Current Watt to serial interface
 
+      kwhaccum = kwhReading + ((double)pulseCount/((double)PULSE_FACTOR));        // Calculate the accumulated energy since the begining
+      dtostrf(kwhaccum, 5, 2, kwhaccumString);                                    // Convert Accum kWh (pulses) to string
+      client.publish(mqtt_topic_pulse,kwhaccumString, true);                      // Publish Accum kWh (pulses) to MQTT topic
+      Serial.print("- Accum kWh: "); Serial.println(kwhaccumString);              // Publish Accum kWh (pulses) to serial interface
+      kwh = 0;                                                                    // Reset kWh count
+        
+      // Send IP address
+      String ipaddress = WiFi.localIP().toString();                               // Create IP address string
+      char ipchar[ipaddress.length()+1];
+      ipaddress.toCharArray(ipchar,ipaddress.length()+1);
+      client.publish(mqtt_topic_ip,ipchar);                                       // Publish IP address to MQTT topic
+    }
 }
 
-/**************************** ON PULSE ************************************/
+/************* ON PULSE *****************************************************************************/
 void onPulse()
 {
     unsigned long newBlink = micros();
     unsigned long interval = newBlink-lastBlink;
-    if (interval<10000L) { // Sometimes we get interrupt on RISING
+    
+    if (interval<10000L) {                          // Sometimes we get interrupt on RISING
             return;
     }
     
-    // Every time there is a pulse, the energy consumption is 1 [pulse] / PULSE_FACTOR [pulses/kWh]
-    // We also want to accumulate the energy (it will be initialized again once MQTT message is sent)
-    kwh += 1.0 / (double)PULSE_FACTOR;
+    kwh += 1.0 / (double)PULSE_FACTOR;    // Every time there is a pulse, the energy consumption is 1 [pulse] / PULSE_FACTOR [pulses/kWh]
     lastBlink = newBlink;
-    pulseCount++;
+    pulseCount++;                         // Accumulate the energy (it will be initialized again once MQTT message is sent)
 }
