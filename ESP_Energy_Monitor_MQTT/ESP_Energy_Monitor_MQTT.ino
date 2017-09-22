@@ -71,6 +71,9 @@ double kwhaccum;
 char kwhaccumString[7];
 float kwhReading;
 
+int N = 1;                                // Number of times to loop
+int runXTimes = 0;                        // Count times looped
+      
 /************* SETUP WIFI *****************************************************************************/
 void setup_wifi() {
   delay(10);
@@ -91,25 +94,21 @@ void setup_wifi() {
 
   Serial.println("");
   Serial.println("WiFi connected");
-  Serial.println("IP address: ");
+  Serial.print("IP address is ");
   Serial.println(WiFi.localIP());
 
-  Serial.print("MAC: ");
-  Serial.print(mac[5],HEX);
-  Serial.print(":");
-  Serial.print(mac[4],HEX);
-  Serial.print(":");
-  Serial.print(mac[3],HEX);
-  Serial.print(":");
-  Serial.print(mac[2],HEX);
-  Serial.print(":");
-  Serial.print(mac[1],HEX);
-  Serial.print(":");
+  Serial.print("MAC address is ");
+  Serial.print(mac[5],HEX); Serial.print(":");
+  Serial.print(mac[4],HEX); Serial.print(":");
+  Serial.print(mac[3],HEX); Serial.print(":");
+  Serial.print(mac[2],HEX); Serial.print(":");
+  Serial.print(mac[1],HEX); Serial.print(":");
   Serial.println(mac[0],HEX);
 }
 
 /************* READ MQTT TOPIC *****************************************************************************/
 void callback(char* topic, byte* payload, unsigned int length) {
+  if (runXTimes < N) {                                                        // Read the topic only N times
   Serial.println();
   Serial.print("Message arrived for topic [");
   Serial.print(topic);
@@ -123,6 +122,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Last kWh Reading: ");
   Serial.println(kwhReading);
   Serial.println();
+  runXTimes++;                                                              // Increase loop count
+  }
 }
   
 /************* RECONNECT MQTT *****************************************************************************/
@@ -196,6 +197,8 @@ void loop()
     bool sendTime = now - lastSend > SEND_FREQUENCY;
     
     if (sendTime) {
+      Serial.println("- - - - - - - - - - - -");                                  // Block separator
+      
       dtostrf(kwh, 2, 4, kwhString);                                              // Convert Current kWh to string
       client.publish(mqtt_topic_kwh,kwhString);                                   // Publish Current kWh to MQTT topic
       Serial.print("- Current kWh: "); Serial.println(kwhString);                 // Publish Current kWh to serial interface
@@ -206,6 +209,7 @@ void loop()
       client.publish(mqtt_topic_watt,wattString);                                 // Publish Current Watt to MQTT topic
       Serial.print("- Current Watt: "); Serial.println(wattString);               // Publish Current Watt to serial interface
 
+      
       kwhaccum = kwhReading + ((double)pulseCount/((double)PULSE_FACTOR));        // Calculate the accumulated energy since the begining
       dtostrf(kwhaccum, 5, 2, kwhaccumString);                                    // Convert Accum kWh (pulses) to string
       client.publish(mqtt_topic_pulse,kwhaccumString, true);                      // Publish Accum kWh (pulses) to MQTT topic
@@ -217,6 +221,8 @@ void loop()
       char ipchar[ipaddress.length()+1];
       ipaddress.toCharArray(ipchar,ipaddress.length()+1);
       client.publish(mqtt_topic_ip,ipchar);                                       // Publish IP address to MQTT topic
+
+      Serial.println();                                                           // Block space
     }
 }
 
