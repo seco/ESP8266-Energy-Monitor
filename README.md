@@ -1,6 +1,5 @@
 # ESP8266 Energy Monitor
 
-### Description
 The **ESP Energy Monitor** is a wifi energy monitor based on a ESP8266 board that uses XTM18S (or compatible) single phase energy meter to get energy readings. The energy monitor is enabled with MQTT and sends readings for power (W), consumption (kWh) and accumulated consumption (kWh), but with a couple tricks you can also get apparent power (kVA) and current (A).
 
 ### Features
