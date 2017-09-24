@@ -1,5 +1,4 @@
 /**
- * 
  * ESP Energy Monitor v3 by Jorge Assunção
  * 
  * Based on a project of timseebeck https://community.home-assistant.io/u/timseebeck on https://community.home-assistant.io
@@ -7,10 +6,8 @@
  * 
  * See Github for instructions on how to use this code : https://github.com/jorgeassuncao/ESP8266-Energy-Monitor
  * 
- *
  * This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License
  * version 2 as published by the Free Software Foundation.
- * 
  */
  
 /************* INCLUDES *****************************************************************************/
@@ -128,19 +125,16 @@ void callback(char* topic, byte* payload, unsigned int length) {
   
 /************* RECONNECT MQTT *****************************************************************************/
 void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting connection to MQTT server... ");
-    // Attempt to connect
-    if (client.connect("ESPenergyMonitor01", mqtt_username, mqtt_password)) {
-      Serial.println(" connected!");
-      client.subscribe("ESP_Energy_Meter_01/pulse");
+  
+  while (!client.connected()) {																																																			// Loop until reconnected
+    Serial.print("Attempting connection to MQTT server... ");                     // Publish text to serial interface
+    if (client.connect("ESPenergyMonitor01", mqtt_username, mqtt_password)) {					// Attempt to connect
+      Serial.println(" connected!");																																														// Publish text to serial interface
+      client.subscribe("ESP_Energy_Meter_01/pulse");																														// Subscribe to MQTT topic
     } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
+      Serial.print("failed, rc="); Serial.print(client.state());                  // Publish text to serial interface
+      Serial.println(" try again in 5 seconds");																																		// Publish text to serial interface
+      delay(5000);																																																																// Wait 5 seconds before retry
     }
   }
 }
@@ -148,12 +142,13 @@ void reconnect() {
 /************* SETUP *****************************************************************************/
 void setup()
 {
-  pinMode(LED_pin, OUTPUT);   // Configure internal LED pin as output.
+  pinMode(LED_pin, OUTPUT);                      // Configure internal LED pin as output.
   
   Serial.begin(115200);
   setup_wifi();
-  client.setServer(mqtt_server, 1883);
+  client.setServer(mqtt_server, 1883);											// Connect to MQTT server
   client.setCallback(callback);
+	
   // Use the internal pullup to be able to hook up this sketch directly to an energy meter with S0 output
   // If no pullup is used, the reported usage will be too high because of the floating pin
   pinMode(DIGITAL_INPUT_SENSOR,INPUT_PULLUP);
@@ -175,7 +170,7 @@ void loop()
       delayMicroseconds(PULSE-ii*10);     // wait
       delay(0);                           // prevent watchdog firing
     }
-    // Breath in
+    // Breath out
     for (int ii=BRIGHT-1;ii>0;ii--){
       digitalWrite(LED_pin, LOW);         // LED on
       delayMicroseconds(ii*10);           // wait
@@ -193,8 +188,7 @@ void loop()
     client.loop();
 
     unsigned long now = millis();
-    // Only send values at a maximum frequency
-    bool sendTime = now - lastSend > SEND_FREQUENCY;
+    bool sendTime = now - lastSend > SEND_FREQUENCY;     // Only send values at a maximum frequency
     
     if (sendTime) {
       Serial.println("- - - - - - - - - - - -");                                  // Block separator
@@ -209,14 +203,12 @@ void loop()
       client.publish(mqtt_topic_watt,wattString);                                 // Publish Current Watt to MQTT topic
       Serial.print("- Current Watt: "); Serial.println(wattString);               // Publish Current Watt to serial interface
 
-      
       kwhaccum = kwhReading + ((double)pulseCount/((double)PULSE_FACTOR));        // Calculate the accumulated energy since the begining
       dtostrf(kwhaccum, 5, 2, kwhaccumString);                                    // Convert Accum kWh (pulses) to string
       client.publish(mqtt_topic_pulse,kwhaccumString, true);                      // Publish Accum kWh (pulses) to MQTT topic
       Serial.print("- Accum kWh: "); Serial.println(kwhaccumString);              // Publish Accum kWh (pulses) to serial interface
       kwh = 0;                                                                    // Reset kWh count
-        
-      // Send IP address
+
       String ipaddress = WiFi.localIP().toString();                               // Create IP address string
       char ipchar[ipaddress.length()+1];
       ipaddress.toCharArray(ipchar,ipaddress.length()+1);
