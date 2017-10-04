@@ -11,7 +11,7 @@ The **ESP Energy Monitor** is a wifi energy monitor based on a ESP8266 board tha
   + Current Watt
   + Accum kWh (pulses)
 + Retains the last accumulated consumption value even if the board is rebooted, reset or powered off
-+ Debug info via serial port
++ Debug info via serial interface
   + IP address
   + MAC address
   + Current kWh
@@ -23,3 +23,5 @@ The **ESP Energy Monitor** is a wifi energy monitor based on a ESP8266 board tha
 ### To-do
 + ESP8266 Webserver to display the same information as the MQTT topics, and serial port, on a web browser
 + Use a non-invasive current sensor to get current (Amps) value and make reliable calculation for Apparent Power (kVA)
++ Remote debug via Telnet server to view the same information as in the serial interface
++ Remotely reset the board
