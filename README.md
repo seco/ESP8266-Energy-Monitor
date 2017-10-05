@@ -17,11 +17,20 @@ The **ESP Energy Monitor** is a wifi energy monitor based on a ESP8266 board tha
   + Current kWh
   + Current Watt
   + Accum kWh (pulses)
-+ Visual confirmation of operation using the internal blue LED
++ Telnet server
+  + Set CPU speed for ESP8266 (80MHz/160MHz)
+  + Remote reset of the board
++ Remote debug via Telnet server with configurable debug level (verbose, debug, info, warning and errors), profiler and filter
+  + Host name
+  + IP address
+  + MAC address
+  + Free Heap RAM
+  + Current kWh
+  + Current Watt
+  + Accum kWh (pulses)
++ Visual confirmation of operation using the board internal blue LED
 
 
 ### To-do
-+ ESP8266 Webserver to display the same information as the MQTT topics, and serial port, on a web browser
++ ESP8266 Webserver to display information about the board as the MQTT topics, and serial port, on a web browser
 + Use a non-invasive current sensor to get current (Amps) value and make reliable calculation for Apparent Power (kVA)
-+ Remote debug via Telnet server to view the same information as in the serial interface
-+ Remotely reset the board
