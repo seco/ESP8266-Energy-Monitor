@@ -6,7 +6,7 @@
  *    | |__' |   _| |_\/_| |_  _| |  \ \_  _/ /   \ \_  
  *    `.____.'  |_____||_____||____| |___||____| |____| 
  * 
- * ESP Energy Monitor v5 by Jorge Assunção
+ * ESP Energy Monitor v0.6.1 by Jorge Assunção
  * 
  * Based on a project of timseebeck @ https://community.home-assistant.io/t/power-monitoring-with-an-xtm18s-and-mqtt/16316
  * Remote Debug over Telnet by JoaoLopesF @ https://github.com/JoaoLopesF/ESP8266-RemoteDebug-Telnet
@@ -19,16 +19,19 @@
  * The entries marked with (**) must be changed to use your own values 
  */
  
-/************* INCLUDES *****************************************************************************/
+/************* INCLUDE LIBRARIES *****************************************************************************/
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 #include "RemoteDebug.h"
 
 /************* PROJECT AND VERSION *****************************************************************************/
-const char* proj_ver = "ESP Energy Monitor v5 (04/10/2017)";        // Print project name and version
+const char* proj_ver = "ESP Energy Monitor v0.6.1 (09/10/2017)";        // Print project name and version
 
 /************* CONFIG DEBUG *****************************************************************************/
-RemoteDebug Debug; 
+RemoteDebug Debug;                                                      // Debug
 
 /************* CONFIG WIFI *****************************************************************************/
 const char* ssid = "wifi_ssid";                   // Wifi SSID (**)
@@ -44,17 +47,20 @@ IPAddress subnet(xxx,xxx,xxx,xxx);                // Subnet mask (**)
 
 #define HOST_NAME "ESP_Energy_Monitor_01"         // Hostname  (**)
 
+ESP8266WebServer server(80);                      // Webserver port
+
 /************* CONFIG MQTT *****************************************************************************/
 const char* mqtt_server = "mqtt_server_address";        // MQTT server IP ou URL (**)
+int mqtt_port = 1883;                                   // MQTT port (**)
 const char* mqtt_username = "mqtt_user";                // MQTT user (**)
 const char* mqtt_password = "mqtt_password";            // MQTT password (**)
 
 /************* MQTT topics *****************************************************************************/
-const char* mqtt_topic_watt = "ESP_Energy_Meter_01/watt";       // MQTT topic - watt (**)
-const char* mqtt_topic_kwh = "ESP_Energy_Meter_01/kwh";         // MQTT topic - kwh (**)
-const char* mqtt_topic_pulse = "ESP_Energy_Meter_01/pulse";     // MQTT topic - pulse (**)
-const char* mqtt_topic_ip = "ESP_Energy_Meter_01/ip";           // MQTT topic - ip (**)
-const char* mqtt_topic_mac = "ESP_Energy_Meter_01/mac";         // MQTT topic - mac (**)
+const char* mqtt_topic_watt = "ESP_Energy_Meter_01/watt";          // MQTT topic - watt (**)
+const char* mqtt_topic_kwh = "ESP_Energy_Meter_01/kwh";            // MQTT topic - kwh (**)
+const char* mqtt_topic_pulse = "ESP_Energy_Meter_01/pulse";        // MQTT topic - pulse (**)
+const char* mqtt_topic_ip = "ESP_Energy_Meter_01/ip";              // MQTT topic - ip (**)
+const char* mqtt_topic_mac = "ESP_Energy_Meter_01/mac";            // MQTT topic - mac (**)
 
 /************* CONFIG PINS *****************************************************************************/
 #define DIGITAL_INPUT_SENSOR 12           // Digital input D6 in Wemos D1 mini
@@ -66,10 +72,10 @@ int LED_pin = 2;                          // Internal LED in NodeMCU
 #define REST 1000                         // Pause between breathes
 
 /************* CONFIG PULSES PER KWH *****************************************************************************/
-#define PULSE_FACTOR 1000                 // Number of pulses per kWh of the meter
+#define PULSE_FACTOR 1000                 // Number of pulses of the meter per kWh
 
 /************* CONFIG OTHER GLOBALS *****************************************************************************/
-unsigned long SEND_FREQUENCY = 15000;     // Minimum time between send in milliseconds (**)
+unsigned long SEND_FREQUENCY = 15000;     // Minimum time between send in milliseconds
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastBlink = 0;
 double kwh;
@@ -92,12 +98,80 @@ uint32_t mmTimeSeconds = 0;
 int N = 1;                                // Number of times to loop
 int runXTimes = 0;                        // Count times looped
 
+/************* SETUP WIFI SERVER *****************************************************************************/
+void handleRoot() {
+
+  char temp[3000];                                              // Number of characters
+  int sec = millis() / 1000;                                    // Convert from millis to seconds
+  int min = sec / 60;                                           // Convert from seconds to minutes
+  int hr = min / 60;                                            // Convert from minutes to hours
+  
+  String ipaddress = WiFi.localIP().toString();                 // Create IP address string
+  char ipchar[ipaddress.length()+1];
+  ipaddress.toCharArray(ipchar,ipaddress.length()+1);
+
+  snprintf ( temp, 3000,                                        // HTML for the root page
+
+  "<html>\
+  <head>\
+    <meta http-equiv='refresh' content='5'/>\
+    <title>%s</title>\
+    <style>\
+      body { background-color: #000000; font-family: Arial, Helvetica, Sans-Serif; color: #ffffff; }\
+      H2 { color: #ff8c00; }\
+    </style>\
+  </head>\
+  <body>\
+    <h2>%s</h2>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>The MQTT topic subscribed is </strong></span><br /><span style='font-size: 10pt; color: #f0f0f0;'><em>%s</em></span></p>\
+    <p>&nbsp;</p>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>IP Address:</strong></span> <span style='font-size: 10pt; color: #f0f0f0;'><em>%s</em></span></p>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>MAC Address:</strong></span> <span style='font-size: 10pt; color: #f0f0f0;'><em>%s</em></span></p>\
+    <p>&nbsp;</p>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>Current kWh:</strong></span> <span style='font-size: 10pt; color: #f0f0f0;'><em>%s</em></span></p>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>Current Watt:</strong></span> <span style='font-size: 10pt; color: #f0f0f0;'><em>%s</em></span></p>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>Accum kWh:</strong></span> <span style='font-size: 10pt; color: #f0f0f0;'><em>%s</em></span></p>\
+    <p>&nbsp;</p>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>Uptime:</strong></span> <span style='font-size: 10pt; color: #f0f0f0;'><em>%02d:%02d:%02d</em></span></p>\
+    <p>&nbsp;</p>\
+    <p><span style='font-size: 11pt; color: #a9a9a9;'><strong>Reset board</strong></span> &nbsp; &nbsp; <input name='reset' type='button' value='reset' /></p>\
+  </body>\
+</html>",
+    host_name,
+    proj_ver,
+    mqtt_topic_pulse,
+    ipchar,
+    myBuffer,
+    kwhString,
+    wattString,
+    kwhaccumString,
+    hr, min % 60, sec % 60
+     );
+     
+     server.send ( 200, "text/html", temp );                    // Send HTML to server
+}
+
+void handleNotFound(){                                          // Handle page not found
+  String message = "Page or File Not Found\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET)?"GET":"POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint8_t i=0; i<server.args(); i++){
+    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+  }
+  server.send(404, "text/plain", message);
+}
+
 /************* SETUP WIFI *****************************************************************************/
 void setup_wifi() {
   delay(20);
 
 /** TELNET **/
-  Debug.begin("ESP_Energy_Monitor_01");                                   // Initiaze the telnet server (**)
+  Debug.begin("ESP_Energy_Monitor_01");                                   // Initiaze the telnet server
   Debug.setResetCmdEnabled(true);                                         // Enable/disable (true/false) the reset command (true/false)
   Debug.showTime(false);                                                  // Enable/disable (true/false) timestamps
   Debug.showProfiler(false);                                              // Enable/disable (true/false) Profiler - time between messages of Debug
@@ -106,12 +180,12 @@ void setup_wifi() {
 
   Serial.println("- - - - - - - - - - - - - - - - - -");                  // Block separator to serial interface
   Debug.println("- - - - - - - - - - - - - - - - - -");                   // Block separator to telnet debug interface
-  Serial.println(proj_ver);                                               // Project name and version to serial interface
-  Debug.println(proj_ver);                                                // Project name and version to telnet debug interface
+  Serial.println(proj_ver);                                               // Send project name and version to serial interface
+  Debug.println(proj_ver);                                                // Send project name and version to telnet debug interface
   Serial.println("- - - - - - - - - - - - - - - - - -");                  // Block separator to serial interface
   Debug.println("- - - - - - - - - - - - - - - - - -");                   // Block separator to telnet debug interface
-  Serial.println();                                                       // Block space to serial interface
-  Debug.println();                                                        // Block space to telnet debug interface
+  Serial.println();                                                       // Send space to serial interface
+  Debug.println();                                                        // Send space to telnet debug interface
   
   Serial.println();                                                       // Connecting to wifi network
   Serial.print("Connecting to "); Serial.println(ssid);                   // Send network name to serial interface
@@ -176,15 +250,15 @@ void reconnect() {
   while (!client.connected()) {                                           // Loop until reconnected
     Serial.print("Attempting connection to MQTT server... ");             // Send text to serial interface
     Debug.printf("Attempting connection to MQTT server... ");             // Send text to telnet debug interface
-    if (client.connect("ESP_Energy_Monitor_01", mqtt_username, mqtt_password)) {       // Connect to MQTT brocker (**)
+    if (client.connect(host_name, mqtt_username, mqtt_password)) {        // Connect to MQTT brocker
       Serial.println(" connected!");                                      // Send text to serial interface
       Debug.println(" connected!");                                       // Send text to telnet debug interface
-      client.subscribe("home/indoor/sensor/ESP_Energy_Meter_01/pulse");   // MQTT topic to subscribe (**)
+      client.subscribe(mqtt_topic_pulse);                                 // MQTT topic to subscribe
     } else {
       Serial.print("failed, rc=");                                        // Send text to serial interface
       Debug.printf("failed, rc=");                                        // Send text to telnet debug interface
       Serial.print(client.state());                                       // Send failure state to serial interface
-      //Debug.printf(client.state());                                       // Send failure state to telnet debug interface
+      //Debug.printf(client.state());                                     // Send failure state to telnet debug interface
       Serial.println(" try again in 5 seconds");                          // Send text to serial interface
       Debug.println(" try again in 5 seconds!");                          // Send text to telnet debug interface
       delay(5000);                                                        // Wait 5 seconds before retrying
@@ -196,19 +270,32 @@ void reconnect() {
 void setup()
 {
   pinMode(LED_pin, OUTPUT);                                               // Configure internal LED pin as output.
+
+  if (MDNS.begin("esp8266")) {                                            // 
+    Serial.println("MDNS responder started");                             // 
+  }                                                                       // 
+
+  server.on("/", handleRoot);                                             // Serve root page when asked
+
+  server.onNotFound(handleNotFound);                                      // Serve page not found
+
+  server.begin();                                                         // Start Webserver
+  Serial.println("HTTP server started");                                  // Send text to serial interface
+  Debug.println("HTTP server started");                                   // Send text to telnet debug interface
   
   Serial.begin(115200);                                                   // Start serial interface
-  setup_wifi();                                                           // Start Wifi
-  client.setServer(mqtt_server, 1883);                                    // Start MQTT
-  client.setCallback(callback);                                           //
-  Debug.begin(HOST_NAME);                                                 // Start Telnet server
+  setup_wifi();                                                           // Start wifi
+  client.setServer(mqtt_server, mqtt_port);                               // client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);                                           // Execute when MQTT subscribed message received
   
   // Use the internal pullup to be able to hook up this sketch directly to an energy meter with S0 output
   // If no pullup is used, the reported usage will be too high because of the floating pin
   pinMode(DIGITAL_INPUT_SENSOR,INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(DIGITAL_INPUT_SENSOR), onPulse, RISING);
+
+  Debug.begin(host_name);                                                 // Start Telnet server
   
-  // Initialization of variables
+  // Initialize variables
   kwh = 0;
   lastSend=millis();
 }
@@ -216,6 +303,9 @@ void setup()
 /************* LOOP *****************************************************************************/
 void loop()
 {
+
+  server.handleClient();
+  
     for (int ii=1;ii<BRIGHT;ii++){                  // Breath in 
       digitalWrite(LED_pin, LOW);                   // LED on
       delayMicroseconds(ii*10);                     // Wait
@@ -277,7 +367,6 @@ void loop()
   Debug.handle();                                                                 // Remote debug over telnet
 
   yield();                                                                        // Yielding
-
 }
 
 /************* ON PULSE *****************************************************************************/
