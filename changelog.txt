@@ -1,3 +1,9 @@
+0.6.4 (12/10/2017)
+------------------
+CHANGED - New method to get seconds, minutes, hours and days
+CHANGED - New method to get MAC address
+CHANGED - New method to get IP address
+
 0.6.3 (10/10/2017)
 ------------------
 ADDED - Webserver html now uses bootstrap
@@ -5,3 +11,4 @@ ADDED - Webserver html now uses bootstrap
 0.6.2 (09/10/2017)
 ------------------
 ADDED - Button on the webserver to reset the board
+
